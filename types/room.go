@@ -58,7 +58,11 @@ func (room *Room) RemovePeer(id string) {
 		room.Signal()
 	}()
 
-	delete(room.peers, id)
+	if peer, ok := room.peers[id]; ok {
+		peer.peerConnection.Close()
+
+		delete(room.peers, id)
+	}
 }
 
 func (room *Room) AddTrack(t *webrtc.TrackRemote) *webrtc.TrackLocalStaticRTP {
@@ -194,7 +198,7 @@ func (room *Room) SendOffer(offer webrtc.SessionDescription, peer *Peer) (err er
 		return err
 	}
 
-	fmt.Printf("Send offer to client: %v", offer)
+	fmt.Println("User:", peer.id, "; Room:", room.id, "; Offer sent")
 
 	if err = peer.websocket.WriteJSON(&WsMessage{
 		Type: "offer",

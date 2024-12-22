@@ -58,14 +58,10 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		fmt.Println("Got message: ", raw)
-
 		if err := json.Unmarshal(raw, message); err != nil {
 			fmt.Println("Failed to unmarshal json to message: ", err)
 			return
 		}
-
-		fmt.Println("Message converted ", message)
 
 		coordinator.HandleEvent(*message, c)
 	}

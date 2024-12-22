@@ -35,7 +35,7 @@ func (coordinator *Coordinator) RemoveRoom(id string) {
 func (coordinator *Coordinator) AddUserToRoom(id string, peerId string, conn *ThreadSafeWriter) {
 	if _, ok := coordinator.rooms[id]; !ok {
 		coordinator.CreateRoom(id)
-		fmt.Println("Created room ", id)
+		fmt.Println("User:", peerId, "; Room:", id, "; Created room:", id)
 	}
 
 	if room, ok := coordinator.rooms[id]; ok {
@@ -72,7 +72,7 @@ func (coordinator *Coordinator) AddUserToRoom(id string, peerId string, conn *Th
 					return
 				}
 
-				fmt.Println("Send candidate to client: ", candidateString)
+				fmt.Println("User:", peer.id, "; Room:", room.id, "; Candidate sent")
 
 				if writeErr := peer.websocket.WriteJSON(&WsMessage{
 					Type: "candidate",
@@ -84,7 +84,7 @@ func (coordinator *Coordinator) AddUserToRoom(id string, peerId string, conn *Th
 
 			// If PeerConnection is closed remove it from global list
 			peerConnection.OnConnectionStateChange(func(p webrtc.PeerConnectionState) {
-				fmt.Println("Connection state change: ", p)
+				fmt.Println("User:", peer.id, "; Room:", room.id, "; Connection state change:", p)
 
 				switch p {
 				case webrtc.PeerConnectionStateFailed:
@@ -98,7 +98,7 @@ func (coordinator *Coordinator) AddUserToRoom(id string, peerId string, conn *Th
 			})
 
 			peerConnection.OnTrack(func(t *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
-				fmt.Println("Got remote track: Kind=", t.Kind(), ", ID=", t.ID(), ", PayloadType=", t.PayloadType())
+				fmt.Println("User:", peer.id, "; Room:", room.id, "; Got remote track: Kind =", t.Kind(), ", ID =", t.ID(), ", PayloadType =", t.PayloadType())
 
 				// Create a track to fan out our incoming video to all peers
 				trackLocal := room.AddTrack(t)
@@ -128,7 +128,7 @@ func (coordinator *Coordinator) AddUserToRoom(id string, peerId string, conn *Th
 			})
 
 			peerConnection.OnICEConnectionStateChange(func(is webrtc.ICEConnectionState) {
-				fmt.Println("ICE connection state changed: ", is)
+				fmt.Println("User:", peer.id, "; Room:", room.id, "; ICE connection state changed: ", is)
 			})
 
 			room.Signal()
@@ -140,7 +140,7 @@ func (coordinator *Coordinator) AddUserToRoom(id string, peerId string, conn *Th
 func (coordinator *Coordinator) RemoveUserFromRoom(id string, peerId string, conn *ThreadSafeWriter) {
 	if room, ok := coordinator.rooms[id]; ok {
 		if _, ok := room.peers[peerId]; ok {
-			delete(room.peers, peerId)
+			room.RemovePeer(peerId)
 		}
 
 		if len(room.peers) <= 0 {
@@ -161,13 +161,14 @@ func (coordinator *Coordinator) HandleEvent(message WsMessage, conn *ThreadSafeW
 
 	switch message.Type {
 	case "join":
-		fmt.Println("Got join")
+		fmt.Println("User:", peerId, "; Room:", roomId, "; Got join")
 
 		coordinator.AddUserToRoom(roomId, peerId, conn)
 	case "leave":
-		fmt.Println("Got leave")
+		fmt.Println("User:", peerId, "; Room:", roomId, "; Got leave")
 
 		coordinator.RemoveUserFromRoom(roomId, peerId, conn)
+		conn.Close()
 	case "candidate":
 		candidate := webrtc.ICECandidateInit{}
 		if err := json.Unmarshal([]byte(data["candidate"].(string)), &candidate); err != nil {
@@ -175,7 +176,7 @@ func (coordinator *Coordinator) HandleEvent(message WsMessage, conn *ThreadSafeW
 			return
 		}
 
-		fmt.Println("Got candidate: ", candidate)
+		fmt.Println("User:", peerId, "; Room:", roomId, "; Got candidate")
 
 		if room, ok := coordinator.rooms[roomId]; ok {
 			if peer, ok := room.peers[peerId]; ok {
@@ -189,7 +190,7 @@ func (coordinator *Coordinator) HandleEvent(message WsMessage, conn *ThreadSafeW
 			return
 		}
 
-		fmt.Println("Got answer: ", answer)
+		fmt.Println("User:", peerId, "; Room:", roomId, "; Got answer")
 
 		if room, ok := coordinator.rooms[roomId]; ok {
 			if peer, ok := room.peers[peerId]; ok {
@@ -201,6 +202,6 @@ func (coordinator *Coordinator) HandleEvent(message WsMessage, conn *ThreadSafeW
 			}
 		}
 	default:
-		fmt.Println("unknown message: ", message)
+		fmt.Println("User:", peerId, "; Room:", roomId, "; Unknown message:", message)
 	}
 }
